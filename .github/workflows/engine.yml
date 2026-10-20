@@ -39,8 +39,16 @@ jobs:
         run: bun run script/build.ts --target=opencode-linux-arm64-musl
 
       - name: Verify Track A binary is static (no ELF interpreter)
-        run: bash scripts/engine/check-elf-static.sh packages/cli/dist/opencode-linux-arm64-musl/bin/opencode
-        # NOTE: runs from repo root; layout from build.ts is dist/<target>/bin/opencode.
+        # Inlined (the job checks out the upstream repo, not this one).
+        # Layout from build.ts: dist/<target>/bin/opencode
+        run: |
+          BIN=packages/cli/dist/opencode-linux-arm64-musl/bin/opencode
+          if readelf -l "$BIN" | grep -q PT_INTERP; then
+            echo "FAIL: $BIN is dynamically linked (PT_INTERP) — not exec'able from an APK" >&2
+            readelf -l "$BIN" | head -30 >&2
+            exit 1
+          fi
+          echo "OK: $BIN is static (no ELF interpreter) and exec-able"
 
       - name: Build Track B — Node-runtime bundle (bundle-only, no SEA exe)
         working-directory: packages/cli
