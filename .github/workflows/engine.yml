@@ -30,14 +30,17 @@ jobs:
       - name: Set up Bun (build time only)
         uses: oven-sh/setup-bun@v2
 
+      - name: Install workspace deps (resolves @opencode/* workspace imports)
+        run: bun install
+
       - name: Build Track A — Bun-compiled static musl binary (linux-arm64)
         working-directory: packages/cli
         run: bun run script/build.ts --target=linux-arm64-musl
 
       - name: Verify Track A binary is static (no ELF interpreter)
-        run: bash ../../scripts/engine/check-elf-static.sh packages/cli/dist/opencode-linux-arm64-musl
-        # NOTE: paths above assume dist naming from build.ts; the first CI run may
-        # reveal a different dist layout — adjust paths, keep the check logic itself.
+        run: bash scripts/engine/check-elf-static.sh packages/cli/dist/opencode-linux-arm64-musl
+        # NOTE: runs from repo root; paths assume dist naming from build.ts — first CI
+        # run may reveal a different dist layout — adjust paths, keep the check logic.
 
       - name: Build Track B — Node-runtime bundle (bundle-only, no SEA exe)
         working-directory: packages/cli
