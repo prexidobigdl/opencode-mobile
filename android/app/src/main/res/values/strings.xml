@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">OpenCode Mobile</string>
+    <string name="engine_starting">Starting engine…</string>
+    <string name="engine_failed">Engine failed to start</string>
+</resources>

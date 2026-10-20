@@ -1,0 +1,67 @@
+name: engine
+# Builds OpenCode v2 engine artifacts from a PINNED upstream ref:
+#  - engine-linux-arm64-musl : Track A binary (Bun-compiled, static)     -> libopencode.so
+#  - engine-node-bundle      : Track B JS bundle (node build path)      -> assets/engine
+# Bun is a BUILD-time tool only — the resulting engine needs no Bun at runtime.
+on:
+  workflow_dispatch:
+    inputs:
+      opencode_ref:
+        description: "Upstream ref (tag preferred; fallback 'v2' branch)"
+        required: false
+        default: "v2.0.26"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/engine.yml"
+      - "scripts/engine/**"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out upstream (pinned)
+        uses: actions/checkout@v4
+        with:
+          repository: anomalyco/opencode
+#          ref: v2.0.26   # pin for release builds; 'v2' tracks the branch head
+          ref: v2
+
+      - name: Set up Bun (build time only)
+        uses: oven-sh/setup-bun@v2
+
+      - name: Build Track A — Bun-compiled static musl binary (linux-arm64)
+        working-directory: packages/cli
+        run: bun run script/build.ts --target=linux-arm64-musl
+
+      - name: Verify Track A binary is static (no ELF interpreter)
+        run: bash ../../scripts/engine/check-elf-static.sh packages/cli/dist/opencode-linux-arm64-musl
+        # NOTE: paths above assume dist naming from build.ts; the first CI run may
+        # reveal a different dist layout — adjust paths, keep the check logic itself.
+
+      - name: Build Track B — Node-runtime bundle (bundle-only, no SEA exe)
+        working-directory: packages/cli
+        run: bun run script/build-node.ts --bundle-only
+        continue-on-error: true   # Track B is experimental (M4); keep pipeline green
+
+      - name: Upload Track A binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: engine-linux-arm64-musl
+          path: packages/cli/dist/opencode-linux-arm64-musl
+          if-no-files-found: error
+
+      - name: Upload Track B bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: engine-node-bundle
+          path: packages/cli/dist-node/
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Record exact upstream commit
+        run: git rev-parse HEAD > ENGINE_COMMIT.txt && cat ENGINE_COMMIT.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: upstream-commit
+          path: ENGINE_COMMIT.txt

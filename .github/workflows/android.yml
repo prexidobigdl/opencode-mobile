@@ -1,0 +1,53 @@
+name: android
+# Consumes engine artifacts from engine.yml and produces the APK.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+  workflow_run:
+    workflows: [engine]
+    types: [completed]
+
+jobs:
+  apk:
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name != 'workflow_run' }}
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: android
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download engine binary (Track A)
+        uses: actions/download-artifact@v4
+        with:
+          name: engine-linux-arm64-musl
+          path: engine-bin
+        # Engine lands as jniLibs file (exec-able once installed, thanks to
+        # useLegacyPackaging=true). Rename enforced: libopencode.so.
+
+      - name: Place engine into jniLibs
+        run: |
+          mkdir -p app/src/main/jniLibs/arm64-v8a
+          find "$GITHUB_WORKSPACE/engine-bin" -type f -name 'opencode*' | grep ELF || true
+          install -m 0755 "$(find "$GITHUB_WORKSPACE/engine-bin" -type f | head -1)" \
+            app/src/main/jniLibs/arm64-v8a/libopencode.so
+          file app/src/main/jniLibs/arm64-v8a/libopencode.so || true
+
+      - name: Set up JDK 17 (AGP 8.x requirement)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build debug APK
+        run: gradle :app:assembleDebug --no-daemon --stacktrace
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: debug-apk
+          path: android/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
